@@ -53,7 +53,7 @@ impl Key_Value{
 
 impl Display for Key_Value{
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f,"{}: {}",self.Key,self.Value.borrow())
+        write!(f,"\"{}\": {}",self.Key,self.Value.borrow())
     }
 }
 
@@ -75,7 +75,7 @@ pub enum  DxValue{
 impl Display for DxValue{
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
-            DxValue::String(T)=> write!(f,"{}",T),
+            DxValue::String(T)=> write!(f,"\"{}\"",T),
             DxValue::Int(T) => write!(f,"{}",T),
             DxValue::Int32(T)=> write!(f,"{}",T),
             DxValue::Int64(T)=> write!(f,"{}",T),
@@ -115,6 +115,7 @@ impl DxValue {
     /// ```
     /// use rust_value::dxvalue::{Key_Value,DxValue};
     /// let objMap = DxValue::newObject();
+    /// objMap.setKeyString("name","不得闲");
     /// ```
     pub fn newObject() -> DxValue{
         DxValue::Object(RefCell::new(Vec::new()))
@@ -124,42 +125,26 @@ impl DxValue {
         DxValue::Array(RefCell::new(Vec::new()))
     }
 
-    /// 通过名称查找对应的值
-    /// # Examples
-    /// ```
-    /// use rust_value::dxvalue::{Key_Value,DxValue};
-    ///
-    /// ```
-    pub fn value_byName(&mut self, name: &str) ->Option<&mut Self> {
-        match self {
-            DxValue::Object(T) =>{
-                let objects = T.get_mut();
-                for i in 0..objects.len(){
-                    if objects[i].Key == name{
-                        return Some(objects[i].Value.get_mut());
-                    }
-                }
-            },
-            DxValue::Array(T) =>{
-                //将字符串转换为整数
-                if let Ok(index) = name.parse::<usize>(){
-                    let arr = T.get_mut();
-                    if index >= 0 && index < arr.len(){
-                        return Some(& mut arr[index]);
-                    }
-                }
-            },
-            _=>(),
-        }
-        None
-    }
-
-
     pub fn as_String(&self) -> String{
         format!("{}",self)
     }
 
-    pub fn as_Value<T: FromStr>(&self,defValue: T) -> T{
+    pub fn as_int(&self)->isize{
+        match self {
+            DxValue::Int(T)=> return *T,
+            DxValue::Int32(T)=>return *T as isize,
+            DxValue::String(T)=> return (*T).parse::<isize>().unwrap_or(0),
+            DxValue::Boolean(T)=> {
+                if *T{ return 1;}
+            },
+            DxValue::Double(T) => return *T as isize,
+            DxValue::Float(T) => return *T as isize,
+            _=>{}
+        }
+        0
+    }
+
+    pub fn as_value<T: FromStr>(&self,defValue: T) -> T{
         //判定一下T是什么类型
         format!("{}",self).parse::<T>().unwrap_or(defValue)
     }
@@ -179,29 +164,34 @@ impl DxValue {
         }
     }
 
-
-    pub fn string_byName(&self,name: &str,defValue: &str) -> String{
+    pub fn as_float(&self) -> f32{
         match self {
-            DxValue::Object(T) =>{
-                let vec = &(*T.borrow());
-                for i in 0..vec.len(){
-                    let v = vec[i].borrow();
-                    if v.Key == name{
-                        return v.Value.borrow().as_String();
-                    }
-                }
+            DxValue::Int(T)=> return *T as f32,
+            DxValue::Int32(T)=>return *T as f32,
+            DxValue::String(T)=> return (*T).parse::<f32>().unwrap_or(0.0),
+            DxValue::Boolean(T)=> {
+                if *T{ return 1.0;}
             },
-            DxValue::Array(T) =>{
-                if let Ok(index) = name.parse::<usize>(){
-                    let arr = &(*T.borrow());
-                    if index >= 0 && index < arr.len(){
-                        return arr[index].borrow().as_String();
-                    }
-                }
-            },
-            _=>(),
+            DxValue::Double(T) => return *T as f32,
+            DxValue::Float(T) => return *T,
+            _=>{}
         }
-        defValue.to_string()
+        0.0
+    }
+
+    pub fn as_double(&self) -> f64{
+        match self {
+            DxValue::Int(T)=> return *T as f64,
+            DxValue::Int32(T)=>return *T as f64,
+            DxValue::String(T)=> return (*T).parse::<f64>().unwrap_or(0 as f64),
+            DxValue::Boolean(T)=> {
+                if *T{ return 1 as f64;}
+            },
+            DxValue::Double(T) => return *T,
+            DxValue::Float(T) => return *T as f64,
+            _=>{}
+        }
+        0 as f64
     }
 
     pub fn setString(&mut self,value: &str){
@@ -225,6 +215,17 @@ impl DxValue {
             },
             _=>{
                 *self = DxValue::Int(value)
+            }
+        }
+    }
+
+    pub fn setBool(&mut self,value: bool){
+        match self {
+            DxValue::Boolean(T)=>{
+                *T = value
+            },
+            _=>{
+                *self = DxValue::Boolean(value)
             }
         }
     }
@@ -274,6 +275,64 @@ impl DxValue {
             }
         }
     }
+
+    pub fn setKeyValue(& mut  self,name: &str,value: Self){
+        match self {
+            DxValue::Object(T) =>{
+                let mut vecobj = T.get_mut();
+                for obj in vecobj{
+                    if obj.Key == name{
+                        let mut v = obj.Value.borrow_mut();
+                        *v = value;
+                        return
+                    }
+                }
+                T.borrow_mut().push(Key_Value::new_value(name,DxValue::String(value.to_string())));
+            },
+            DxValue::Array(T)=>{
+                if let Ok(index) = name.parse::<usize>(){
+                    let mut vecobj = T.get_mut();
+                    if index < 0{
+                        vecobj.insert(0,DxValue::String(value.to_string()));
+                        return;
+                    }
+                    if index > vecobj.len(){
+                        vecobj.push(DxValue::String(value.to_string()));
+                        return;
+                    }
+                    vecobj[index] = DxValue::String(value.to_string());
+                }
+            },
+            _=>{
+
+            }
+        }
+    }
+
+    pub fn string_byName(&self,name: &str,defValue: &str) -> String{
+        match self {
+            DxValue::Object(T) =>{
+                let vec = &(*T.borrow());
+                for i in 0..vec.len(){
+                    let v = vec[i].borrow();
+                    if v.Key == name{
+                        return v.Value.borrow().as_String();
+                    }
+                }
+            },
+            DxValue::Array(T) =>{
+                if let Ok(index) = name.parse::<usize>(){
+                    let arr = &(*T.borrow());
+                    if index >= 0 && index < arr.len(){
+                        return arr[index].borrow().as_String();
+                    }
+                }
+            },
+            _=>(),
+        }
+        defValue.to_string()
+    }
+
     pub fn int_byName(&self,name: &str,defValue: isize) -> isize{
         match self {
             DxValue::Object(T) =>{
@@ -318,6 +377,140 @@ impl DxValue {
         defValue
     }
 
+    pub fn float_byName(&self,name: &str,defValue: f32) -> f32{
+        match self {
+            DxValue::Object(T) =>{
+                let vec = &(*T.borrow());
+                for i in 0..vec.len(){
+                    let obj = vec[i].borrow();
+                    if obj.Key == name{
+                        match &(*obj.Value.borrow()) {
+                            DxValue::Int32(t) => return *t  as f32,
+                            DxValue::Int(t) => return *t as f32,
+                            DxValue::Int64(t) => return *t as f32,
+                            DxValue::String(t) => return (*t).parse::<f32>().unwrap_or(defValue),
+                            DxValue::Boolean(t) =>{
+                                if *t {return 1 as f32;}
+                                else {return 0 as f32;}
+                            }
+                            _=> return defValue,
+                        }
+                    }
+                }
+            },
+            DxValue::Array(T) =>{
+                if let Ok(index) = name.parse::<usize>(){
+                    let arr = &(*T.borrow());
+                    if index >= 0 && index < arr.len(){
+                        match &(*arr[index].borrow()){
+                            DxValue::Int32(t) => return *t  as f32,
+                            DxValue::Int(t) => return *t as f32,
+                            DxValue::Int64(t) => return *t as f32,
+                            DxValue::String(t) => return (*t).parse::<f32>().unwrap_or(defValue),
+                            DxValue::Boolean(t) =>{
+                                if *t {return 1 as f32;}
+                                else {return 0 as f32;}
+                            }
+                            _=> return defValue,
+                        }
+                    }
+                }
+            },
+            _=>(),
+        }
+        defValue
+    }
+
+    pub fn double_byName(&self,name: &str,defValue: f64) -> f64{
+        match self {
+            DxValue::Object(T) =>{
+                let vec = &(*T.borrow());
+                for i in 0..vec.len(){
+                    let obj = vec[i].borrow();
+                    if obj.Key == name{
+                        match &(*obj.Value.borrow()) {
+                            DxValue::Int32(t) => return *t  as f64,
+                            DxValue::Int(t) => return *t as f64,
+                            DxValue::Int64(t) => return *t as f64,
+                            DxValue::String(t) => return (*t).parse::<f64>().unwrap_or(defValue),
+                            DxValue::Boolean(t) =>{
+                                if *t {return 1 as f64;}
+                                else {return 0 as f64;}
+                            }
+                            _=> return defValue,
+                        }
+                    }
+                }
+            },
+            DxValue::Array(T) =>{
+                if let Ok(index) = name.parse::<usize>(){
+                    let arr = &(*T.borrow());
+                    if index >= 0 && index < arr.len(){
+                        match &(*arr[index].borrow()){
+                            DxValue::Int32(t) => return *t  as f64,
+                            DxValue::Int(t) => return *t as f64,
+                            DxValue::Int64(t) => return *t as f64,
+                            DxValue::String(t) => return (*t).parse::<f64>().unwrap_or(defValue),
+                            DxValue::Boolean(t) =>{
+                                if *t {return 1 as f64;}
+                                else {return 0 as f64;}
+                            }
+                            _=> return defValue,
+                        }
+                    }
+                }
+            },
+            _=>(),
+        }
+        defValue
+    }
+
+    pub fn bool_byName(&self,name: &str,defValue: bool) -> bool{
+        match self {
+            DxValue::Object(T) =>{
+                let vec = &(*T.borrow());
+                for i in 0..vec.len(){
+                    let obj = vec[i].borrow();
+                    if obj.Key == name{
+                        match &(*obj.Value.borrow()) {
+                            DxValue::Int32(t) => return *t != 0,
+                            DxValue::Int(t) => return *t != 0,
+                            DxValue::Int64(t) => return *t != 0,
+                            DxValue::String(t) => {
+                                if let Ok(v64) = (*t).parse::<f64>(){
+                                    return v64 != 0.0;
+                                }
+                            },
+                            DxValue::Boolean(t) => return *t,
+                            _=> return defValue,
+                        }
+                    }
+                }
+            },
+            DxValue::Array(T) =>{
+                if let Ok(index) = name.parse::<usize>(){
+                    let arr = &(*T.borrow());
+                    if index >= 0 && index < arr.len(){
+                        match &(*arr[index].borrow()){
+                            DxValue::Int32(t) => return *t != 0,
+                            DxValue::Int(t) => return *t != 0,
+                            DxValue::Int64(t) => return *t != 0,
+                            DxValue::String(t) => {
+                                if let Ok(v64) = (*t).parse::<f64>(){
+                                    return v64 != 0.0;
+                                }
+                            },
+                            DxValue::Boolean(t) => return *t,
+                            _=> return defValue,
+                        }
+                    }
+                }
+            },
+            _=>(),
+        }
+        defValue
+    }
+
     pub fn num_byName<T: Display+std::str::FromStr>(&self,name: &str,defValue: T) -> T{
         match self {
             DxValue::Object(T) =>{
@@ -343,6 +536,36 @@ impl DxValue {
         defValue
     }
 
+    /// 通过名称查找对应的值
+    /// # Examples
+    /// ```
+    /// use rust_value::dxvalue::{Key_Value,DxValue};
+    ///
+    /// ```
+    pub fn value_byName(&mut self, name: &str) ->Option<&mut Self> {
+        match self {
+            DxValue::Object(T) =>{
+                let objects = T.get_mut();
+                for i in 0..objects.len(){
+                    if objects[i].Key == name{
+                        return Some(objects[i].Value.get_mut());
+                    }
+                }
+            },
+            DxValue::Array(T) =>{
+                //将字符串转换为整数
+                if let Ok(index) = name.parse::<usize>(){
+                    let arr = T.get_mut();
+                    if index >= 0 && index < arr.len(){
+                        return Some(& mut arr[index]);
+                    }
+                }
+            },
+            _=>(),
+        }
+        None
+    }
+
     /// 查询指定的索引位置上的值
     ///
     pub fn value_byIndex<'a>(&'a mut self,index: usize) -> Option<&'a mut Self>{
@@ -362,6 +585,29 @@ impl DxValue {
             _=>(),
         }
         None
+    }
+
+    pub fn string_byIndex(&self,index: usize,defValue: String)->String{
+        match self {
+            DxValue::Object(T) =>{
+                let vec = T.borrow();
+                if index < vec.len(){
+                    if let Some(v) =  vec.get(index){
+                        return v.Value.borrow().as_String();
+                    }
+                }
+            },
+            DxValue::Array(T)=>{
+                let arr = T.borrow();
+                if index < arr.len(){
+                    if let Some(v) = arr.get(index){
+                        return v.as_String();
+                    }
+                }
+            },
+            _=>(),
+        }
+        defValue
     }
 
 }

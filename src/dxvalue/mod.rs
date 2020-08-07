@@ -1,6 +1,5 @@
-use std::fmt::{Debug, Formatter, Result, Error, Display};
-use std::{result,cell,boxed,rc};
-use std::string;
+use std::fmt::{Debug, Formatter, Result, Display};
+use std::cell;
 use std::cell::{RefCell, Ref};
 use std::str::FromStr;
 use std::any::TypeId;
@@ -246,7 +245,7 @@ impl DxValue {
                     index += 1;
                 }
                 temp.push(Key_Value::new_value(name,DxValue::String(value.to_string())));*/
-                let mut vecobj = T.get_mut();
+                let vecobj = T.get_mut();
                 for obj in vecobj{
                     if obj.Key == name{
                         let mut v = obj.Value.borrow_mut();
@@ -287,20 +286,20 @@ impl DxValue {
                         return
                     }
                 }
-                T.borrow_mut().push(Key_Value::new_value(name,DxValue::String(value.to_string())));
+                T.borrow_mut().push(Key_Value::new_value(name,value));
             },
             DxValue::Array(T)=>{
                 if let Ok(index) = name.parse::<usize>(){
-                    let mut vecobj = T.get_mut();
+                    let vecobj = T.get_mut();
                     if index < 0{
-                        vecobj.insert(0,DxValue::String(value.to_string()));
+                        vecobj.insert(0,value);
                         return;
                     }
                     if index > vecobj.len(){
-                        vecobj.push(DxValue::String(value.to_string()));
+                        vecobj.push(value);
                         return;
                     }
-                    vecobj[index] = DxValue::String(value.to_string());
+                    vecobj[index] = value;
                 }
             },
             _=>{
@@ -610,4 +609,95 @@ impl DxValue {
         defValue
     }
 
+    pub fn int_byIndex(&self,index: usize,defValue: isize)->isize{
+        match self {
+            DxValue::Object(T) =>{
+                let vec = T.borrow();
+                if index < vec.len(){
+                    if let Some(v) =  vec.get(index){
+                        return v.Value.borrow().as_int();
+                    }
+                }
+            },
+            DxValue::Array(T)=>{
+                let arr = T.borrow();
+                if index < arr.len(){
+                    if let Some(v) = arr.get(index){
+                        return v.as_int();
+                    }
+                }
+            },
+            _=>(),
+        }
+        defValue
+    }
+
+    pub fn bool_byIndex(&self,index: usize,defValue: bool)->bool{
+        match self {
+            DxValue::Object(t) =>{
+                let vec = t.borrow();
+                if index < vec.len(){
+                    if let Some(v) =  vec.get(index){
+                        return v.Value.borrow().as_bool();
+                    }
+                }
+            },
+            DxValue::Array(t)=>{
+                let arr = t.borrow();
+                if index < arr.len(){
+                    if let Some(v) = arr.get(index){
+                        return v.as_bool();
+                    }
+                }
+            },
+            _=>(),
+        }
+        defValue
+    }
+
+    pub fn float_byIndex(&self,index: usize,defValue: f32)->f32{
+        match self {
+            DxValue::Object(t) =>{
+                let vec = t.borrow();
+                if index < vec.len(){
+                    if let Some(v) =  vec.get(index){
+                        return v.Value.borrow().as_float();
+                    }
+                }
+            },
+            DxValue::Array(t)=>{
+                let arr = t.borrow();
+                if index < arr.len(){
+                    if let Some(v) = arr.get(index){
+                        return v.as_float();
+                    }
+                }
+            },
+            _=>(),
+        }
+        defValue
+    }
+
+    pub fn double_byIndex(&self,index: usize,defValue: f64)->f64{
+        match self {
+            DxValue::Object(t) =>{
+                let vec = t.borrow();
+                if index < vec.len(){
+                    if let Some(v) =  vec.get(index){
+                        return v.Value.borrow().as_double();
+                    }
+                }
+            },
+            DxValue::Array(t)=>{
+                let arr = t.borrow();
+                if index < arr.len(){
+                    if let Some(v) = arr.get(index){
+                        return v.as_double();
+                    }
+                }
+            },
+            _=>(),
+        }
+        defValue
+    }
 }

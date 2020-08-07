@@ -70,7 +70,6 @@ pub enum  DxValue{
     Boolean(bool),
     None
 }
-
 impl Display for DxValue{
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match self {
@@ -98,8 +97,14 @@ impl Display for DxValue{
             DxValue::Array(T) =>{
                 write!(f,"[")?;
                 let vecArr = &(*T.borrow());
+                let mut isfirst = true;
                 for v in vecArr{
-                    write!(f,"{},",v)?;
+                    if isfirst{
+                        write!(f,"{}",v)?;
+                        isfirst = false;
+                    }else{
+                        write!(f,",{}",v)?;
+                    }
                 }
                 write!(f,"]")
             },
@@ -127,6 +132,10 @@ impl DxValue {
     pub fn as_String(&self) -> String{
         format!("{}",self)
     }
+
+    /*pub fn iter(&self) -> Iter {
+        Iter{curindex:0,ptr: Rc::new(self)}
+    }*/
 
     pub fn as_int(&self)->isize{
         match self {
@@ -275,6 +284,37 @@ impl DxValue {
         }
     }
 
+    pub fn setIndexValue(&mut self,idx: isize,value: Self){
+        match self {
+            DxValue::Object(T) =>{
+                let mut vecobj = T.get_mut();
+                if idx < 0 || idx as usize >= vecobj.len(){
+                    return;
+                }
+                if let Some(obj) = vecobj.get_mut(idx as usize){
+                    let mut v = obj.Value.borrow_mut();
+                    *v = value;
+                    return;
+                }
+            },
+            DxValue::Array(T)=>{
+                let vecobj = T.get_mut();
+                if idx < 0{
+                    vecobj.insert(0,value);
+                    return;
+                }
+                if idx as usize >= vecobj.len(){
+                    vecobj.push(value);
+                    return;
+                }
+                vecobj[idx as usize] = value;
+            },
+            _=>{
+
+            }
+        }
+    }
+
     pub fn setKeyValue(& mut  self,name: &str,value: Self){
         match self {
             DxValue::Object(T) =>{
@@ -306,6 +346,19 @@ impl DxValue {
 
             }
         }
+    }
+
+    pub fn len(&self)->usize{
+        match self {
+            DxValue::Object(t)=>{
+                return t.borrow().len();
+            },
+            DxValue::Array(t)=>{
+                return t.borrow().len();
+            },
+            _=>(),
+        }
+        0
     }
 
     pub fn string_byName(&self,name: &str,defValue: &str) -> String{
